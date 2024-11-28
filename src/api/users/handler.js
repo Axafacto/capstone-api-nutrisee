@@ -8,75 +8,149 @@ const JWT_SECRET = process.env.JWT_SECRET; // Ambil JWT_SECRET dari file .env
 
 
 
-// Handler untuk registrasi
+//register handler
 const registerHandler = async (request, h) => {
     const { username, email, password } = request.payload;
 
     // Validasi input
     if (!username || !email || !password) {
-        return h.response({ message: 'Username, email, and password are required!' }).code(400);
+        return h.response({
+            status: 'fail',
+            message: 'Username, email, and password are required!',
+        }).code(400);
     }
 
     try {
         // Hash password sebelum menyimpan ke database
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Simpan ke Firestore
-        const userRef = db.collection('users').doc(); // ID unik otomatis
+        // Buat dokumen baru dengan ID otomatis
+        const userRef = db.collection('users').doc();
+        const userId = userRef.id;
+
+        // Simpan data pengguna ke koleksi `users`
         await userRef.set({
             username,
             email,
-            password: hashedPassword,
+            password: hashedPassword, // Password di-hash untuk keamanan
         });
 
-        return h.response({ message: 'User registered successfully' }).code(201);
+        // Kirim respons sukses
+        return h.response({
+            status: 'success',
+            message: 'User registered successfully',
+            userId, // Sertakan userId untuk referensi di client
+        }).code(201);
     } catch (error) {
         console.error('Error registering user:', error);
-        return h.response({ message: 'Error registering user' }).code(500);
+        return h.response({
+            status: 'error',
+            message: 'Error registering user',
+        }).code(500);
     }
 };
+
+
 
 // Handler untuk login
 const loginHandler = async (request, h) => {
     const { email, password } = request.payload;
 
     if (!email || !password) {
-        return h.response({ message: 'Email and password are required!' }).code(400);
+        return h.response({
+            status: 'fail',
+            message: 'Email and password are required!',
+        }).code(400);
     }
 
     try {
+        // Cari user berdasarkan email
         const usersRef = db.collection('users');
         const querySnapshot = await usersRef.where('email', '==', email).get();
 
+        // Jika user tidak ditemukan
         if (querySnapshot.empty) {
-            return h.response({ message: 'User not found' }).code(404);
+            return h.response({
+                status: 'fail',
+                message: 'User not found',
+            }).code(404);
         }
 
-        const user = querySnapshot.docs[0].data();
+        const userDoc = querySnapshot.docs[0]; // Ambil dokumen user
+        const user = userDoc.data();
+        const userId = userDoc.id; // Dapatkan ID user
+
+        // Validasi password
         const isPasswordValid = await bcrypt.compare(password, user.password);
-
         if (!isPasswordValid) {
-            return h.response({ message: 'Invalid email or password' }).code(401);
+            return h.response({
+                status: 'fail',
+                message: 'Invalid email or password',
+            }).code(401);
         }
 
+        // Buat token JWT
         const token = jwt.sign(
-            { email: user.email, username: user.username },
+            { userId, email: user.email, username: user.username },
             JWT_SECRET,
-            { expiresIn: '1h' }
+            { expiresIn: '1h' } // Token berlaku selama 1 jam
         );
 
-        // Cek token dan response di log
-        console.log("Generated Token:", token);
-
+        // Respons sukses
         return h.response({
+            status: 'success',
             message: 'Login successful',
-            token: token,  // Pastikan token dikirimkan dalam response
+            data: {
+                token, // Kirimkan token untuk digunakan client
+            },
         }).code(200);
     } catch (error) {
         console.error('Error logging in:', error.message);
-        return h.response({ message: 'Error logging in', error: error.message }).code(500);
+        return h.response({
+            status: 'error',
+            message: 'An error occurred while logging in',
+        }).code(500);
+    }
+};
+
+const getUserByIdHandler = async (request, h) => {
+    const { id } = request.params; // Ambil ID dari parameter URL
+
+    try {
+        // Ambil data user berdasarkan ID dokumen
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+
+        // Jika user tidak ditemukan
+        if (!userDoc.exists) {
+            return h.response({
+                status: 'fail',
+                message: `User with ID ${id} not found`,
+            }).code(404);
+        }
+
+        // Ambil data user dari dokumen
+        const userData = userDoc.data();
+
+        // Kembalikan data user
+        return h.response({
+            status: 'success',
+            message: 'User retrieved successfully',
+            data: {
+                id, // Sertakan ID user
+                ...userData, // Data user lainnya (username, email, dll.)
+            },
+        }).code(200);
+    } catch (error) {
+        console.error('Error retrieving user by ID:', error.message);
+        return h.response({
+            status: 'error',
+            message: 'An error occurred while retrieving user',
+        }).code(500);
     }
 };
 
 
-module.exports = { registerHandler, loginHandler };
+
+
+module.exports = { registerHandler, loginHandler, getUserByIdHandler};
