@@ -1,9 +1,11 @@
 // src/api/nutrition/handler.js
 const { db } = require('../../firebase');
-const addUserDataHandler = async (request, h) => {
-    const { age, gender, height, weight, targetWeight } = request.payload;
-    const { userId } = request.auth; // Ambil userId dari token
 
+const updateUserDataHandler = async (request, h) => {
+    const { userId } = request.auth; // Mendapatkan userId dari JWT yang sudah tervalidasi
+    const { age, gender, height, weight, targetWeight } = request.payload;
+
+    // Validasi input
     if (!age || !gender || !height || !weight || !targetWeight) {
         return h.response({
             status: 'fail',
@@ -11,90 +13,47 @@ const addUserDataHandler = async (request, h) => {
         }).code(400);
     }
 
+    // Validasi targetWeight
+    const validTargetWeights = ['loss weight', 'maintain weight', 'gain weight'];
+    if (!validTargetWeights.includes(targetWeight)) {
+        return h.response({
+            status: 'fail',
+            message: 'Invalid targetWeight. Allowed values are: loss weight, maintain weight, gain weight.',
+        }).code(400);
+    }
+
     try {
-        // Ambil referensi user dengan ID dari token
+        // Referensi dokumen user berdasarkan userId dari JWT
         const userRef = db.collection('users').doc(userId);
 
-        // Periksa apakah dokumen user ada
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
-            return h.response({
-                status: 'fail',
-                message: 'User not found',
-            }).code(404);
-        }
-
-        // Simpan data ke subcollection 'data' di user
-        const dataRef = userRef.collection('data').doc(); // Menambahkan data baru dengan ID otomatis
+        // Menambahkan data ke subcollection "data" di dalam dokumen user
+        const dataRef = userRef.collection('data').doc(); // Menggunakan auto-generated ID untuk subcollection
+        
+        // Menyimpan data dalam subcollection "data"
         await dataRef.set({
             age,
             gender,
             height,
             weight,
             targetWeight,
+            updatedAt: new Date(), // Menambahkan waktu update untuk tracking
         });
 
+        // Respons jika pembaruan berhasil
         return h.response({
             status: 'success',
-            message: 'User data added successfully',
+            message: 'User data added to subcollection successfully',
         }).code(200);
     } catch (error) {
-        console.error('Error adding user data:', error);
+        // Log error jika ada masalah
+        console.error('Error adding user data to subcollection:', error);
+
+        // Respons error jika terjadi masalah
         return h.response({
             status: 'error',
-            message: 'An error occurred while adding user data',
+            message: 'An error occurred while adding data to subcollection',
         }).code(500);
     }
 };
 
-module.exports = { addUserDataHandler};
-
-
-
-
-/* const calculateBmiHandler = async (request, h) => {
-    const { gender, age, height, weight } = request.payload;
-
-    if (!gender || !age || !height || !weight) {
-        return h.response({
-            status: 'fail',
-            message: 'Gender, age, height, and weight are required!',
-        }).code(400);
-    }
-
-    try {
-        const token = request.headers.authorization.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.userId; // Ambil userId dari token
-
-        const bmi = weight / (height * height); // Rumus BMI
-        const { protein, fat, carbs } = calculateNutrition(bmi);
-
-        // Simpan ke subcollection `profile/bmi`
-        const bmiRef = db.collection('users').doc(userId).collection('profile').doc('bmi');
-        await bmiRef.set({
-            gender,
-            age,
-            height,
-            weight,
-            bmi,
-            protein,
-            fat,
-            carbs,
-        });
-
-        return h.response({
-            status: 'success',
-            message: 'BMI and nutrition calculated successfully',
-            data: { bmi, protein, fat, carbs },
-        }).code(200);
-    } catch (error) {
-        console.error('Error calculating BMI:', error);
-        return h.response({
-            status: 'error',
-            message: 'Unable to calculate BMI',
-        }).code(500);
-    }
-};
-
-module.exports = { calculateBmiHandler }; */
+module.exports = { updateUserDataHandler };

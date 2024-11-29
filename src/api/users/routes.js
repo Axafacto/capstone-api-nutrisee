@@ -1,6 +1,9 @@
-const { registerHandler, loginHandler, getUserByIdHandler,  } = require('./handler');
-const { addUserDataHandler } = require('../nutrition/handler')
-const authMiddleware  = require('../../middleware/authMiddleware');
+// src/api/users/routes.js
+const { registerHandler, loginHandler, getUserByIdHandler } = require('./handler');
+const { validateToken } = require('../../middleware/authMiddleware');
+const { updateUserDataHandler } = require('../nutrition/handler');
+
+
 const routes = [
     {
         method: 'GET',
@@ -14,29 +17,30 @@ const routes = [
     },
     {
         method: 'POST',
-        path: '/register',
+        path: '/auth/register',
         handler: registerHandler,
     },
     {
         method: 'POST',
-        path: '/login',
+        path: '/auth/login',
         handler: loginHandler,
     },
     {
         method: 'GET',
         path: '/users/{id}',
-        handler: getUserByIdHandler
+        handler: getUserByIdHandler,
     },
     {
         method: 'POST',
         path: '/users/data',
-        handler: addUserDataHandler,
+        handler: updateUserDataHandler,
         options: {
             pre: [
-                { method: authMiddleware }, // Middleware autentikasi
+                { method: validateToken, },  // Menggunakan validateToken sebagai middleware
             ],
         },
-    },
+    }
+      
 ];
 
 module.exports = routes;
