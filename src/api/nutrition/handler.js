@@ -165,15 +165,15 @@ const calculateDailyNeeds = (gender, bmiCategory, targetWeight) => {
 const getUserDataHandler = async (request, h) => {
     const { userId } = request.auth; // Mendapatkan userId dari JWT yang sudah tervalidasi
 
-    console.log('User ID from token:', userId);  // Verifikasi ID yang diterima dari token
-
     try {
-        // Referensi ke koleksi 'data' pengguna
-        const dataRef = db.collection('users').doc(userId).collection('data');
+        // Referensi ke dokumen pengguna di Firestore
+        const userRef = db.collection('users').doc(userId);
+        const dataSnapshot = await userRef.collection('data')
+            .orderBy('updatedAt', 'desc')
+            .limit(1)
+            .get();
 
-        // Ambil dokumen data terbaru, misalnya yang terakhir diperbarui
-        const dataSnapshot = await dataRef.orderBy('updatedAt', 'desc').limit(1).get();
-
+        // Jika data pengguna tidak ditemukan
         if (dataSnapshot.empty) {
             return h.response({
                 status: 'fail',
@@ -181,114 +181,73 @@ const getUserDataHandler = async (request, h) => {
             }).code(404);
         }
 
-        // Ambil dokumen pertama (dokumen data terbaru)
-        const userDoc = dataSnapshot.docs[0];
+        // Ambil dokumen pertama (data terbaru)
+        const userData = dataSnapshot.docs[0].data();
 
-        const userData = userDoc.data(); // Mengambil data dari dokumen 'data'
-
-        // Periksa jika dailyNeeds ada dan merupakan objek map
-        if (!userData.dailyNeeds || typeof userData.dailyNeeds !== 'object') {
-            return h.response({
-                status: 'fail',
-                message: 'No valid daily needs data found for the user',
-            }).code(404);
-        }
-
-        // Ambil riwayat makanan dari koleksi 'nutritionHistory'
-        const nutritionHistoryRef = dataRef.doc(userDoc.id).collection('nutritionHistory');
-        const nutritionHistorySnapshot = await nutritionHistoryRef.where('date', '==', new Date().toISOString().split('T')[0]).get();
-
-        // Menghitung total kalori dan nutrisi lainnya dari history
-        let totalCalories = 0;
-        let totalProtein = 0;
-        let totalCarbs = 0;
-        let totalFat = 0;
-
-        nutritionHistorySnapshot.forEach(doc => {
-            const nutritionData = doc.data().nutrition;
-            totalCalories += nutritionData['Calories (kcal)'] || 0;
-            totalProtein += nutritionData['Protein (g)'] || 0;
-            totalCarbs += nutritionData['Carbohydrates (g)'] || 0;
-            totalFat += nutritionData['Fat (g)'] || 0;
-        });
-
-        // Menyiapkan response dengan data lengkap pengguna dan dailyNeeds
-        const response = {
+        // Respons dengan data pengguna
+        return h.response({
             status: 'success',
-            message: 'User data and daily needs fetched successfully',
+            message: 'User data retrieved successfully',
             data: {
-                dailyNeeds: userData.dailyNeeds,  // Menampilkan data dailyNeeds
-                nutritionHistory: {
-                    totalCalories,
-                    totalProtein,
-                    totalCarbs,
-                    totalFat,
-                    targetCalories: userData.dailyNeeds.Calories,
-                    targetProtein: userData.dailyNeeds.Protein,
-                    targetCarbs: userData.dailyNeeds.Carbohydrates,
-                    targetFat: userData.dailyNeeds.Fat,
-                    // Anda bisa menambahkan perhitungan untuk sisa kalori dan nutrisi
-                    remainingCalories: userData.dailyNeeds.Calories - totalCalories,
-                    remainingProtein: userData.dailyNeeds.Protein - totalProtein,
-                    remainingCarbs: userData.dailyNeeds.Carbohydrates - totalCarbs,
-                    remainingFat: userData.dailyNeeds.Fat - totalFat,
-                }
+                age: userData.age,
+                gender: userData.gender,
+                height: userData.height,
+                weight: userData.weight,
+                targetWeight: userData.targetWeight,
+                bmi: userData.bmi,
+                category: userData.category,
+                dailyNeeds: userData.dailyNeeds,
+                nutritionHistory: userData.nutritionHistory,
             },
-        };
-
-        return h.response(response).code(200);
-
+        }).code(200);
     } catch (error) {
-        // Log error jika ada masalah
         console.error('Error fetching user data:', error);
 
         // Respons error jika terjadi masalah
         return h.response({
             status: 'error',
-            message: 'An error occurred while fetching user data',
+            message: 'An error occurred while retrieving user data',
         }).code(500);
     }
 };
 
-
-
-
-const updateUserNutritionHandler = async (request, h) => {
-    const { userId } = request.params;
-    const { dailyNeeds } = request.payload;
+const getNutritionHistoryHandler = async (request, h) => {
+    const { userId } = request.auth; // Mendapatkan userId dari JWT yang sudah tervalidasi
 
     try {
-        // Referensi ke koleksi 'data' pengguna
-        const dataRef = db.collection('users').doc(userId).collection('data');
+        // Referensi ke dokumen pengguna di Firestore
+        const userRef = db.collection('users').doc(userId);
+        const dataSnapshot = await userRef.collection('data')
+            .orderBy('updatedAt', 'desc')
+            .limit(1)
+            .get();
 
-        // Ambil dokumen terbaru berdasarkan 'updatedAt'
-        const dataSnapshot = await dataRef.orderBy('updatedAt', 'desc').limit(1).get();
-
+        // Jika data pengguna tidak ditemukan
         if (dataSnapshot.empty) {
             return h.response({
                 status: 'fail',
-                message: 'No user data found to update',
+                message: 'User data not found',
             }).code(404);
         }
 
-        // Ambil dokumen pertama (dokumen terbaru)
-        const latestDoc = dataSnapshot.docs[0];
+        // Ambil dokumen pertama (data terbaru)
+        const userData = dataSnapshot.docs[0].data();
 
-        // Update dokumen terbaru
-        await dataRef.doc(latestDoc.id).update({
-            dailyNeeds,
-            updatedAt: new Date(), // Update waktu untuk mencatat perubahan terakhir
-        });
-
+        // Respons dengan data pengguna
         return h.response({
             status: 'success',
-            message: 'User daily needs updated successfully',
+            message: 'User data retrieved successfully',
+            data: {
+                nutritionHistory: userData.nutritionHistory,
+            },
         }).code(200);
     } catch (error) {
-        console.error('Error updating user data:', error);
+        console.error('Error fetching user data:', error);
+
+        // Respons error jika terjadi masalah
         return h.response({
             status: 'error',
-            message: 'Error updating user data',
+            message: 'An error occurred while retrieving user data',
         }).code(500);
     }
 };
@@ -296,4 +255,5 @@ const updateUserNutritionHandler = async (request, h) => {
 
 
 
-module.exports = { updateUserDataHandler, getUserDataHandler, updateUserNutritionHandler };
+
+module.exports = { updateUserDataHandler, getUserDataHandler, getNutritionHistoryHandler };
