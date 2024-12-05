@@ -20,7 +20,24 @@ const registerHandler = async (request, h) => {
         }).code(400);
     }
 
+    // Validasi format email
+    if (!email.includes('@')) {
+        return h.response({
+            status: 'fail',
+            message: 'Invalid email format! Email must contain "@" symbol.',
+        }).code(400);
+    }
+
     try {
+        // Cek apakah email sudah terdaftar di database
+        const existingUser = await db.collection('users').where('email', '==', email).get();
+        if (!existingUser.empty) {
+            return h.response({
+                status: 'fail',
+                message: 'Email is already registered!',
+            }).code(400);
+        }
+
         // Hash password sebelum menyimpan ke database
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -49,6 +66,7 @@ const registerHandler = async (request, h) => {
         }).code(500);
     }
 };
+
 
 
 
@@ -114,18 +132,18 @@ const loginHandler = async (request, h) => {
 };
 
 const getUserByIdHandler = async (request, h) => {
-    const { id } = request.params; // Ambil ID dari parameter URL
+    const { userId } = request.auth; // Mendapatkan userId dari JWT yang tervalidasi
 
     try {
-        // Ambil data user berdasarkan ID dokumen
-        const userRef = db.collection('users').doc(id);
+        // Referensi ke dokumen user berdasarkan userId
+        const userRef = db.collection('users').doc(userId);
         const userDoc = await userRef.get();
 
         // Jika user tidak ditemukan
         if (!userDoc.exists) {
             return h.response({
                 status: 'fail',
-                message: `User with ID ${id} not found`,
+                message: `User with ID ${userId} not found`,
             }).code(404);
         }
 
@@ -137,15 +155,15 @@ const getUserByIdHandler = async (request, h) => {
             status: 'success',
             message: 'User retrieved successfully',
             data: {
-                id, // Sertakan ID user
+                id: userId, // Sertakan ID user
                 ...userData, // Data user lainnya (username, email, dll.)
             },
         }).code(200);
     } catch (error) {
-        console.error('Error retrieving user by ID:', error.message);
+        console.error('Error retrieving user by JWT:', error.message);
         return h.response({
             status: 'error',
-            message: 'An error occurred while retrieving user',
+            message: 'An error occurred while retrieving user data',
         }).code(500);
     }
 };
@@ -153,4 +171,7 @@ const getUserByIdHandler = async (request, h) => {
 
 
 
-module.exports = { registerHandler, loginHandler, getUserByIdHandler};
+
+
+
+module.exports = { registerHandler, loginHandler, getUserByIdHandler, };
