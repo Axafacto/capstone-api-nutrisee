@@ -169,9 +169,4 @@ const getUserByIdHandler = async (request, h) => {
 };
 
 
-
-
-
-
-
 module.exports = { registerHandler, loginHandler, getUserByIdHandler, };
