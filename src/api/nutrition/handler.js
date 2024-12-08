@@ -50,7 +50,7 @@ const updateUserDataHandler = async (request, h) => {
         }
 
         // Kalkulasi kebutuhan harian
-        const dailyNeeds = calculateDailyNeeds(gender, bmiCategory, targetWeight);
+        const dailyNeeds = calculateDailyNeeds(gender, bmiCategory, targetWeight, age, weight, height);
 
         // Referensi dokumen user
         const userRef = db.collection('users').doc(userId);
@@ -134,32 +134,44 @@ const updateUserDataHandler = async (request, h) => {
 };
 
 // Fungsi untuk menghitung kebutuhan harian
-const calculateDailyNeeds = (gender, bmiCategory, targetWeight) => {
-    // Default nilai dasar kebutuhan harian
-    const baseCalories = gender === 'male' ? 2500 : 2000;
-    const baseProtein = gender === 'male' ? 75 : 66;
-    const baseCarbohydrates = 150;
-    const baseFat = 50;
-    const baseFiber = 8;
+const calculateDailyNeeds = (gender, bmiCategory, targetWeight, age, weight, height) => {
+    // Menghitung BMR menggunakan rumus Mifflin-St Jeor
+    let bmr;
 
-    let adjustmentFactor = 1.0; // Faktor penyesuaian
-
-    // Penyesuaian berdasarkan kategori BMI dan targetWeight
-    if (targetWeight === 'loss weight') {
-        adjustmentFactor = 0.85; // Kurangi 15%
-    } else if (targetWeight === 'gain weight') {
-        adjustmentFactor = 1.15; // Tambah 15%
+    if (gender === 'male') {
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5; // Rumus BMR untuk pria
+    } else {
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161; // Rumus BMR untuk wanita
     }
 
-    // Hitung kebutuhan harian dengan penyesuaian
+    // Menghitung TDEE dengan faktor aktivitas (lightly active)
+    const tdee = bmr * 1.375; // Faktor aktivitas untuk mahasiswa yang cukup aktif
+
+    // Penyesuaian berdasarkan targetWeight
+    let adjustmentFactor = 1.0; // Faktor penyesuaian
+
+    if (targetWeight === 'loss weight') {
+        adjustmentFactor = 0.85; // Kurangi 15% untuk penurunan berat badan
+    } else if (targetWeight === 'gain weight') {
+        adjustmentFactor = 1.15; // Tambah 15% untuk penambahan berat badan
+    }
+
+    // Hitung kebutuhan kalori dan makronutrien harian
+    const calories = Math.round(tdee * adjustmentFactor);
+    const protein = Math.round((calories * 0.15) / 4); // 15% dari kalori untuk protein
+    const carbohydrates = Math.round((calories * 0.55) / 4); // 55% dari kalori untuk karbohidrat
+    const fat = Math.round((calories * 0.25) / 9); // 25% dari kalori untuk lemak
+    const fiber = 25; // Serat harian tetap 25g sebagai rekomendasi umum
+
     return {
-        Calories: Math.round(baseCalories * adjustmentFactor),
-        Protein: Math.round(baseProtein * adjustmentFactor),
-        Carbohydrates: Math.round(baseCarbohydrates * adjustmentFactor),
-        Fat: Math.round(baseFat * adjustmentFactor),
-        Fiber: Math.round(baseFiber * adjustmentFactor),
+        Calories: calories,
+        Protein: protein,
+        Carbohydrates: carbohydrates,
+        Fat: fat,
+        Fiber: fiber
     };
 };
+
 
 
 const getUserDataHandler = async (request, h) => {
