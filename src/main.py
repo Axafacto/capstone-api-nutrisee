@@ -14,7 +14,7 @@ import jwt
 from fastapi.security import OAuth2PasswordBearer
 import firebase_admin
 from fastapi import Depends
-
+from fastapi.responses import JSONResponse
 
 # Inisialisasi Firestore
 cred = credentials.Certificate("src/key.json")
@@ -48,9 +48,6 @@ def verify_token(token: str):
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-
-
 
 
 
@@ -198,6 +195,14 @@ async def get_result_image(filename: str):
     return FileResponse(file_path)
 
     
+@app.get("/")
+def read_root():
+    # Membuat respons dengan status kode 200
+    response_content = {
+        "status": "success",
+        "message": "API connected successfully!",
+    }
+    return JSONResponse(content=response_content, status_code=200)
 
 # Jalankan server
 if __name__ == "__main__":
