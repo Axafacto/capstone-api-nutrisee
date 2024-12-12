@@ -1,0 +1,12 @@
+runtime: python311
+service: model-1-api
+entrypoint: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+
+instance_class: F4 //recomended
+
+handlers:
+- url: /.*
+  script: auto
+
+env_variables:
+  GAE_USE_SYSLOG: true
